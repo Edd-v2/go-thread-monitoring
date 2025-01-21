@@ -3,6 +3,7 @@ package task
 import (
 	"fmt"
 	"go-thread-monitoring/sender"
+	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -17,31 +18,44 @@ type TaskManager struct {
 
 func NewTaskManager(connManager *sender.ConnectionManager) *TaskManager {
 	return &TaskManager{
-		taskChannel: make(chan struct{}, 5),
+		taskChannel: make(chan struct{}, 3),
 		connManager: connManager,
 	}
 }
 
 func (tm *TaskManager) StartRandomTask() {
-	tm.taskChannel <- struct{}{} // push into channel random elements
+	log.Println("Attempting to start a new task...")
 
-	// lock the resource, update count of process in "PROCESSING"
-	tm.mutex.Lock()
-	tm.activeTask++
-	tm.mutex.Unlock()
+	select {
+	case tm.taskChannel <- struct{}{}: //if push into channel of random elements is possible
+		log.Println("Task added to the channel")
 
-	// simulate processing
-	duration := time.Duration(rand.Intn(5)+1) * time.Second
-	time.Sleep(duration)
+		// lock the resource, update count of process in "PROCESSING"
+		tm.mutex.Lock()
+		tm.activeTask++
+		tm.mutex.Unlock()
+		log.Println("Active task count incremented")
 
-	// lock the resource, since task complete its process, remove 1 from process count
-	tm.mutex.Lock()
-	tm.activeTask--
-	tm.mutex.Unlock()
+		// simulate processing
+		duration := time.Duration(rand.Intn(15)+1) * time.Second
+		log.Printf("Stimated Task duration for %v seconds...\n", duration.Seconds())
+		time.Sleep(duration)
 
-	// send task to esit queue
-	message := fmt.Sprintf("Task completed in %v seconds ", duration.Seconds())
-	tm.connManager.Publish("task", message)
+		<-tm.taskChannel //remove task from channell since processing is terminated
+
+		// lock the resource, since task complete its process, remove 1 from process count
+		tm.mutex.Lock()
+		tm.activeTask--
+		tm.mutex.Unlock()
+		log.Println("Task removed - count decremented")
+
+		// send task to esit queue
+		message := fmt.Sprintf("Task completed in %v seconds ", duration.Seconds())
+		tm.connManager.Publish("task", message)
+	default:
+		log.Println("Unable to start task: channel is full. Try again later.") // or create another channel
+	}
+
 }
 
 func (tm *TaskManager) GetTaskStatus() int {

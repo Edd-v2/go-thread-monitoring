@@ -25,17 +25,27 @@ func init_api_and_processor(connManager *sender.ConnectionManager) {
 	task_manager := task.NewTaskManager(connManager)
 
 	r.POST("/start-task", func(c *gin.Context) {
+		log.Println("Received request to start a new task")
+
 		go task_manager.StartRandomTask()
+
+		log.Println("Task started successfully")
 		c.JSON(http.StatusOK, gin.H{"status": "Task started"})
 	})
 
 	r.GET("/clear", func(c *gin.Context) {
+		log.Println("Received request to clear all tasks in channel")
+
 		task_manager.ClearAllChannel()
-		c.JSON(http.StatusOK, gin.H{"esit": "All channel process are empty"})
+
+		log.Println("All tasks in channel cleared")
+		c.JSON(http.StatusOK, gin.H{"esit": "All channel process are cleared"})
 	})
 
 	r.GET("/status", func(c *gin.Context) {
 		status := task_manager.GetTaskStatus()
+
+		log.Printf("Active task count: %d", status)
 		c.JSON(http.StatusOK, gin.H{"active_tasks": status})
 	})
 
